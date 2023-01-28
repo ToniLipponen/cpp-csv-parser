@@ -1,9 +1,10 @@
 #pragma once
 #include <sstream>
-#include <utility>
+#include <ostream>
+#include <istream>
 #include <vector>
 #include <unordered_map>
-#include <fstream>
+#include <exception>
 
 class CSVType
 {
@@ -64,7 +65,7 @@ private:
     std::string m_data;
 };
 
-class CSV
+class CSVReader
 {
 public:
     class Row
@@ -92,19 +93,19 @@ public:
     };
 
 public:
-    CSV() = default;
+    CSVReader() = default;
 
-    explicit CSV(const std::string& str)
+    explicit CSVReader(const std::string& str)
     {
         LoadFromString(str);
     }
 
-    explicit CSV(std::istream& stream)
+    explicit CSVReader(std::istream& stream)
     {
         LoadFromStream(stream);
     }
 
-    virtual ~CSV() = default;
+    virtual ~CSVReader() = default;
 
     bool LoadFromString(const std::string& str)
     {
@@ -174,13 +175,53 @@ public:
 
     std::vector<std::string> GetColumnNames() { return m_columnNames; }
 
-    Row* begin() { return m_rows.begin().base(); }
-    Row* end() { return m_rows.end().base(); }
+    std::vector<Row>::iterator begin() { return m_rows.begin(); }
+    std::vector<Row>::iterator end() { return m_rows.end(); }
 
-    const Row* cbegin() {return m_rows.cbegin().base(); }
-    const Row* cend() {return m_rows.cend().base(); }
+    std::vector<Row>::const_iterator cbegin() { return m_rows.cbegin(); }
+    std::vector<Row>::const_iterator cend() { return m_rows.cend(); }
 
 private:
     std::vector<std::string> m_columnNames;
     std::vector<Row> m_rows;
+};
+
+class CSVWriter
+{
+public:
+    explicit CSVWriter(std::ostream& stream, std::initializer_list<std::string> columnNames, char delimiter = ',')
+    : m_stream(stream), m_header(columnNames), m_delimiter(delimiter)
+    {
+        for(auto i = m_header.begin(); i != m_header.end(); i++)
+        {
+            m_stream << *i << ((i+1 == m_header.end()) ? '\n' : m_delimiter);
+        }
+    }
+
+    template<typename ... Args>
+    void InsertRow(const Args& ... args)
+    {
+        static int argCount = sizeof...(args);
+
+        if(argCount > m_header.size() || argCount < m_header.size())
+        {
+            throw std::runtime_error("Row field count doesn't match the specified column count");
+        }
+
+        Insert<Args ...>(args...);
+    }
+
+private:
+    void Insert() {}
+
+    template<typename First, typename ... Args>
+    inline void Insert(const First& first, const Args& ... args)
+    {
+        m_stream << first << (sizeof...(args) ? m_delimiter : '\n');
+        Insert(args...);
+    }
+
+    std::ostream& m_stream;
+    std::vector<std::string> m_header;
+    char m_delimiter;
 };
